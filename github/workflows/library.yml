@@ -1,75 +1,63 @@
-name: CI Workflow
+name: Symfony 7 + Cypress E2E Tests
 
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
-
+    push:
+        branches: [ main ]
+    pull_request:
+        branches: [ main ]
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    services:
-      mysql:
-        image: mysql:8
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: test_db
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=3
-
-    steps:
-      # Checkout the code
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      # Set up PHP
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.1' # Replace with your PHP version
-          extensions: mbstring, pdo_mysql
-          ini-values: post_max_size=256M, upload_max_filesize=256M
-          coverage: none
-
-      # Install Composer
-      - name: Install Composer
-        run: composer install --no-progress --no-suggest
-
-      # Configure the project
-      - name: Configure project
-        run: |
-          cp .env.test .env
-          php artisan config:cache
-
-      # Run database migrations
-      - name: Run migrations
-        run: php artisan migrate --force
-
-      # Start PHP server
-      - name: Start PHP server
-        run: php -S 127.0.0.1:8000 -t public &
-        env:
-          APP_ENV: testing
-
-      # Set up Node.js
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16' # Replace with your Node.js version
-
-      # Install Cypress
-      - name: Install Cypress
-        run: npm install cypress --save-dev
-
-      # Run Cypress tests
-      - name: Run Cypress tests
-        run: npx cypress run
+    Symfony-test:
+        runs-on: ubuntu-latest
+        # installation des services
+        services:
+            mysql:
+                image: mysql:8.0
+                env:
+                    MYSQL_ROOT_PASSWORD: root
+                    MYSQL_DATABASE: app
+                ports:
+                    - 3306:3306
+                options: >-
+                    --health-cmd="mysqladmin ping -h localhost"
+                    --health-interval=10s
+                    --health-timeout=5s
+                    --health-retries=5
+        steps:
+            # récupération du code du repository
+            - name: Checkout code
+              uses: actions/checkout@v4
+            
+            # configuration de PHP
+            - name: Set up PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                php-version: "8.2"
+                extensions: mbstring, intl, pdo_mysql, sodium
+                tools: composer  
+            
+            # paramétrage de l'environnement de test
+            - name: Set up .env for CI
+              run: |
+                cp .env .env.test
+                echo "APP_ENV=test" >> .env
+                echo "APP_ENV=test" >> .env.test
+                echo "DATABASE_URL=mysql://root:root@127.0.0.1:3306/app" >> .env.test
+            
+            # installation des dépendances Symfony
+            - name: Install PHP dependencies
+              run: composer install --no-interaction --prefer-dist
+            
+            # migration de la base de données
+            - name: migration DB
+              run: |
+                php bin/console d:d:c
+                php bin/console d:m:m
+            
+            # démarrage du serveur Symfony
+            - name: Run Symfony local server
+              run: |
+                php -S 127.0.0.1:8001 -t public &
+            
+            # Cypress Actions
+            - name : Test Cypress
+              uses: cypress-io/github-action@v6
